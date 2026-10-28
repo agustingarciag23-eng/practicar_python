@@ -1,0 +1,17 @@
+{
+  "name": "PyQuest",
+  "short_name": "PyQuest",
+  "description": "Aprende Python jugando, de print() a proyectos tipo examen.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#103B4B",
+  "theme_color": "#103B4B",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
