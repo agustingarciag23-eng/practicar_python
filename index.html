@@ -222,6 +222,17 @@ main{padding-block:24px 64px}
 .inputs-box{width:100%;min-height:72px;background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:var(--f-mono);font-size:14px;resize:vertical}
 .exam-rules{margin:12px 0 0;padding-left:18px;color:var(--muted);font-size:14px}
 .exam-rules li{margin-bottom:4px}
+.acc{max-width:440px}
+.acc .seg{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:12px;margin-bottom:18px}
+.acc .seg button{flex:1;border:0;background:none;padding:9px;border-radius:9px;font-weight:700;color:var(--muted)}
+.acc .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-weight:700;font-size:14px}
+.field input{font:inherit;font-size:16px;padding:11px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.field input:focus-visible{outline:3px solid var(--yellow);outline-offset:1px;border-color:var(--blue)}
+.field small{color:var(--muted);font-size:13px}
+.sync-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:1px}
+.sync-dot.ok{background:var(--good)} .sync-dot.err{background:var(--bad)} .sync-dot.busy{background:var(--yellow)}
 .notice{background:var(--bad-bg);color:var(--bad);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-weight:600}
 
 @media (max-width:820px){
@@ -257,6 +268,7 @@ main{padding-block:24px 64px}
       <button data-tab="games">Minijuegos</button>
       <button data-tab="achievements">Logros</button>
       <button data-tab="console">Consola libre</button>
+      <button data-tab="account" id="accTab">Entrar</button>
     </nav>
   </div>
 </header>
@@ -793,7 +805,11 @@ const fresh = () => ({xp:0, coins:20, done:{}, streak:{count:0,last:null}, ach:{
 let S = fresh();
 try{ const raw = localStorage.getItem(KEY); if(raw) S = Object.assign(fresh(), JSON.parse(raw)); }catch(e){}
 S.stats = Object.assign(fresh().stats, S.stats||{});
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function save(){
+  S.updatedAt = Date.now();
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+  if(window.Sync) Sync.schedule();
+}
 
 function levelInfo(xp){
   let lvl=1, need=100, base=0;
@@ -1010,7 +1026,7 @@ let view = "map";
 function setTab(t){ document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current", String(b.dataset.tab===t))); }
 function go(v, arg){
   view = v; stopBlitz();
-  ({map:renderMap, challenge:renderChallenge, games:renderGames, blitz:renderBlitz, parsons:renderParsons, exam:renderExam, achievements:renderAch, console:renderConsole})[v](arg);
+  ({map:renderMap, challenge:renderChallenge, games:renderGames, blitz:renderBlitz, parsons:renderParsons, exam:renderExam, achievements:renderAch, console:renderConsole, account:renderAccount})[v](arg);
   setTab({challenge:"map", blitz:"games", parsons:"games", exam:"games"}[v] || v);
   scrollTo({top:0});
 }
@@ -1032,6 +1048,7 @@ function renderMap(){
       ? `${WORLDS.length} mundos y ${allSteps.length} retos, de tu primer print() a programas completos como los del examen. Los mundos marcados como Entra en clase siguen tus prácticas. Cada reto se ejecuta con Python de verdad, aquí mismo.`
       : `Llevas ${doneCount} de ${allSteps.length} retos. Con media hora al día, sigue por donde lo dejaste. Cuando termines los mundos de clase, prueba el simulacro de examen en Minijuegos.`}</p></div>
     <div>${nx?`<button class="btn primary" id="cont">${doneCount?"Continuar":"Empezar"}: ${esc(nx.title)}</button>`:`<button class="btn primary" id="cont">Ir a los minijuegos</button>`}</div></section>`;
+  if(!Sync.user) html += `<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:22px;padding:14px 18px"><span style="flex:1;min-width:200px;font-weight:600">Entra con una cuenta para tener tu progreso en el móvil y en el ordenador.</span><button class="btn blue sm" id="mapLogin">Entrar o crear cuenta</button></div>`;
   if(!window.Sk) html += `<div class="notice">No se ha podido cargar el intérprete de Python. Los retos de tipo test y los juegos funcionan; para ejecutar código, recarga la página con conexión.</div>`;
   WORLDS.forEach((w,wi)=>{
     const open = worldOpen(wi), d = w.steps.filter(s=>S.done[s.id]).length;
@@ -1048,6 +1065,7 @@ function renderMap(){
   app.innerHTML = html;
   app.querySelectorAll(".node").forEach(b=>b.onclick=()=>go("challenge", b.dataset.step));
   $("#cont").onclick = ()=> nx ? go("challenge", nx.id) : go("games");
+  if($("#mapLogin")) $("#mapLogin").onclick = ()=>go("account");
 }
 
 /* ----- Reto ----- */
@@ -1355,10 +1373,10 @@ function renderAch(){
   </div>
   <h2 class="section-title">Medallas</h2>
   <div class="ach-grid">${ACH.map(a=>`<div class="ach ${S.ach[a.id]?"on":""}"><div class="medal">${S.ach[a.id]?ICON.trophy:ICON.lock}</div><div><h3>${esc(a.t)}</h3><p>${esc(a.d)}</p></div></div>`).join("")}</div>
-  <div style="margin-top:30px;display:flex;gap:10px;align-items:center;flex-wrap:wrap" id="rz"><button class="btn ghost sm" id="reset">Borrar mi progreso</button><span style="color:var(--muted);font-size:14px">Tu progreso se guarda en este navegador.</span></div>`;
+  <div style="margin-top:30px;display:flex;gap:10px;align-items:center;flex-wrap:wrap" id="rz"><button class="btn ghost sm" id="reset">Borrar mi progreso</button><span style="color:var(--muted);font-size:14px">${Sync.user ? `Tu progreso se guarda en tu cuenta (${esc(Sync.user)}). Si lo borras, se borra en todos tus dispositivos.` : "Tu progreso se guarda solo en este navegador. Entra con una cuenta para tenerlo en todos tus dispositivos."}</span></div>`;
   $("#reset").onclick = ()=>{
     $("#rz").innerHTML = `<strong>¿Seguro? Perderás XP, logros y retos superados.</strong><button class="btn sm" style="background:var(--bad);color:#fff" id="yes">Sí, borrar todo</button><button class="btn ghost sm" id="no">Cancelar</button>`;
-    $("#yes").onclick = ()=>{ S = fresh(); attempt = {}; save(); renderHud(); go("map"); toast("Progreso borrado. ¡A empezar de nuevo!"); };
+    $("#yes").onclick = ()=>{ S = fresh(); S.resetAt = Date.now(); attempt = {}; save(); renderHud(); go("map"); toast("Progreso borrado. ¡A empezar de nuevo!"); };
     $("#no").onclick = ()=>renderAch();
   };
 }
@@ -1399,8 +1417,142 @@ function renderConsole(){
   app.querySelectorAll("[data-ex]").forEach(b=>b.onclick=()=>{ ta.value = consoleCode = EXAMPLES[b.dataset.ex]; ta.dispatchEvent(new Event("input")); $("#cin").value = consoleInputs = EXAMPLE_INPUTS[b.dataset.ex] || ""; });
 }
 
+/* ======================= CUENTA Y SINCRONIZACIÓN ======================= */
+const AUTH_KEY = "pyquest-auth";
+function normalize(st){ const n = Object.assign(fresh(), st||{}); n.stats = Object.assign(fresh().stats, n.stats||{}); return n; }
+
+/* Junta el progreso de dos dispositivos sin perder retos ni logros de ninguno */
+function mergeState(L, R){
+  if(!R) return L;
+  const lt = L.updatedAt||0, rt = R.updatedAt||0;
+  const [newer, older] = rt > lt ? [R, L] : [L, R];
+  if(newer.resetAt && newer.resetAt >= (older.updatedAt||0)) return JSON.parse(JSON.stringify(newer));
+  const m = JSON.parse(JSON.stringify(newer));
+  const ns = newer.stats||{}, os = older.stats||{};
+  m.done = {...(older.done||{}), ...(newer.done||{})};
+  m.ach = {...(older.ach||{}), ...(newer.ach||{})};
+  m.xp = Math.max(L.xp||0, R.xp||0);
+  if((newer.xp||0) < (older.xp||0)) m.coins = older.coins;
+  m.stats = {...ns};
+  for(const k of ["runs","clean","blitzBest","exams"]) m.stats[k] = Math.max(os[k]||0, ns[k]||0);
+  m.stats.parsons = {...(os.parsons||{}), ...(ns.parsons||{})};
+  const eb = [os.examBest, ns.examBest].filter(x=>typeof x==="number");
+  m.stats.examBest = eb.length ? Math.min(...eb) : null;
+  if(older.streak && newer.streak && older.streak.last===newer.streak.last) m.streak.count = Math.max(older.streak.count||0, newer.streak.count||0);
+  m.updatedAt = Math.max(lt, rt);
+  return m;
+}
+
+window.Sync = {
+  user:null, token:null, status:"off", error:"", lastSync:0, timer:null, dirty:false, running:false, again:false,
+  load(){ try{ const a = JSON.parse(localStorage.getItem(AUTH_KEY)||"null"); if(a && a.token){ this.user = a.user; this.token = a.token; } }catch(e){} },
+  persist(){ try{ if(this.token) localStorage.setItem(AUTH_KEY, JSON.stringify({user:this.user, token:this.token})); else localStorage.removeItem(AUTH_KEY); }catch(e){} },
+  async api(path, method="GET", body){
+    let res;
+    try{
+      res = await fetch("/api/"+path, {method, headers:{"content-type":"application/json", ...(this.token?{authorization:"Bearer "+this.token}:{})}, body: body===undefined ? undefined : JSON.stringify(body)});
+    }catch(e){ throw new Error("Sin conexión. Se volverá a intentar."); }
+    let data = {}; try{ data = await res.json(); }catch(e){}
+    if(res.status===401 && this.token && path!=="login"){ this.signOutLocal(); toast("Tu sesión ha caducado. Vuelve a entrar para sincronizar."); }
+    if(!res.ok) throw new Error(data.error || "No se ha podido conectar con el servidor.");
+    return data;
+  },
+  setStatus(s, err=""){ this.status = s; this.error = err; updateAccTab(); renderAccStatus(); },
+  async auth(mode, user, pass){
+    const d = await this.api(mode, "POST", {user, pass});
+    this.user = d.user; this.token = d.token; this.persist();
+    await this.sync();
+  },
+  schedule(){ if(!this.token) return; this.dirty = true; clearTimeout(this.timer); this.timer = setTimeout(()=>this.sync(), 8000); },
+  async sync(manual){
+    if(!this.token) return;
+    if(this.running){ this.again = true; return; }
+    this.running = true; clearTimeout(this.timer); this.dirty = false; this.setStatus("busy");
+    try{
+      const r = await this.api("progress");
+      const before = JSON.stringify(S);
+      S = normalize(mergeState(S, r.data));
+      try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+      if(!r.data || JSON.stringify(r.data)!==JSON.stringify(S)) await this.api("progress", "PUT", {data:S, updatedAt:S.updatedAt||Date.now()});
+      this.lastSync = Date.now(); this.setStatus("ok");
+      if(JSON.stringify(S)!==before){ renderHud(); if(["map","achievements","games"].includes(view)) go(view); }
+      if(manual) toast("Progreso sincronizado");
+    }catch(e){ this.dirty = true; if(this.token) this.setStatus("err", e.message); }
+    finally{ this.running = false; if(this.again){ this.again = false; this.schedule(); } }
+  },
+  flush(){
+    if(!this.token || !this.dirty) return;
+    clearTimeout(this.timer); this.dirty = false;
+    fetch("/api/progress", {method:"PUT", keepalive:true, headers:{"content-type":"application/json", authorization:"Bearer "+this.token}, body:JSON.stringify({data:S, updatedAt:S.updatedAt||Date.now()})}).catch(()=>{});
+  },
+  async signOut(){ try{ await this.api("logout", "POST", {}); }catch(e){} this.signOutLocal(); },
+  signOutLocal(){ clearTimeout(this.timer); this.user = null; this.token = null; this.dirty = false; this.persist(); this.setStatus("off"); },
+};
+
+function updateAccTab(){ const t = $("#accTab"); if(t) t.textContent = Sync.user ? "Cuenta: "+Sync.user : "Entrar"; }
+function renderAccStatus(){
+  const el = $("#accStatus"); if(!el) return;
+  const hhmm = t => new Date(t).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"});
+  const txt = {busy:"Sincronizando…", ok: Sync.lastSync ? `Sincronizado a las ${hhmm(Sync.lastSync)}` : "Sincronizado", err:`No se ha podido sincronizar. ${Sync.error}`, off:"Sin sincronizar"}[Sync.status] || "";
+  el.innerHTML = `<span class="sync-dot ${Sync.status==="ok"?"ok":Sync.status==="err"?"err":Sync.status==="busy"?"busy":""}"></span>${esc(txt)}`;
+}
+
+let accMode = "login";
+function renderAccount(){
+  if(Sync.user){
+    app.innerHTML = `<section class="hero"><div><h1>Tu cuenta</h1><p>Tu progreso se guarda en tu cuenta y se sincroniza solo. Entra con el mismo usuario en el móvil, en el ordenador o en la app de la pantalla de inicio y seguirás donde lo dejaste.</p></div></section>
+    <div class="panel acc"><div class="eyebrow">Conectado como</div><h2 style="font-size:26px;margin:4px 0 10px">${esc(Sync.user)}</h2>
+      <p id="accStatus" style="margin:0 0 6px;font-weight:600"></p>
+      <div class="toolbar"><button class="btn blue sm" id="accSync">Sincronizar ahora</button><button class="btn ghost sm" id="accOut">Cerrar sesión</button></div>
+      <p style="color:var(--muted);font-size:14px;margin:4px 0 0">Si cierras sesión, tu progreso se queda en este dispositivo pero deja de sincronizarse.</p></div>`;
+    renderAccStatus();
+    $("#accSync").onclick = ()=>Sync.sync(true);
+    $("#accOut").onclick = async ()=>{ await Sync.signOut(); toast("Sesión cerrada"); renderAccount(); };
+    return;
+  }
+  const reg = accMode==="register";
+  app.innerHTML = `<section class="hero"><div><h1>${reg?"Crea tu cuenta":"Entra en tu cuenta"}</h1><p>Con una cuenta, tu XP, retos y logros se guardan en la nube. Entra desde cualquier dispositivo y sigue el curso donde lo dejaste.</p></div></section>
+  <div class="panel acc">
+    <div class="seg" role="group" aria-label="Elige una opción"><button type="button" id="mLogin" aria-pressed="${!reg}">Entrar</button><button type="button" id="mReg" aria-pressed="${reg}">Crear cuenta</button></div>
+    <form id="accForm" novalidate>
+      <div class="field"><label for="accUser">Usuario</label><input id="accUser" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="20" required>${reg?`<small>De 3 a 20 caracteres: minúsculas, números o _.</small>`:""}</div>
+      <div class="field"><label for="accPass">Contraseña</label><input id="accPass" name="password" type="password" autocomplete="${reg?"new-password":"current-password"}" minlength="6" maxlength="128" required>${reg?`<small>Mínimo 6 caracteres. Mejor no uses la misma que en otros sitios.</small>`:""}</div>
+      <button class="btn primary" id="accGo" type="submit" style="width:100%">${reg?"Crear cuenta y guardar mi progreso":"Entrar"}</button>
+      <div id="accErr"></div>
+    </form>
+    ${Object.keys(S.done).length ? `<p style="color:var(--muted);font-size:14px;margin:14px 0 0">El progreso que ya tienes en este dispositivo se añadirá a tu cuenta.</p>` : ""}
+  </div>`;
+  $("#mLogin").onclick = ()=>{ accMode = "login"; renderAccount(); };
+  $("#mReg").onclick = ()=>{ accMode = "register"; renderAccount(); };
+  $("#accForm").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const user = $("#accUser").value.trim().toLowerCase(), pass = $("#accPass").value, btn = $("#accGo"), err = $("#accErr");
+    err.innerHTML = "";
+    if(!/^[a-z0-9_]{3,20}$/.test(user)){ err.innerHTML = `<div class="feedback ko"><div class="body">El usuario debe tener de 3 a 20 caracteres: minúsculas, números o _.</div></div>`; return; }
+    if(pass.length < 6){ err.innerHTML = `<div class="feedback ko"><div class="body">La contraseña debe tener al menos 6 caracteres.</div></div>`; return; }
+    btn.disabled = true; btn.textContent = reg ? "Creando cuenta…" : "Entrando…";
+    try{
+      await Sync.auth(reg ? "register" : "login", user, pass);
+      toast(reg ? `Cuenta creada. ¡Bienvenido, ${user}!` : `Hola de nuevo, ${user}. Progreso recuperado.`, true);
+      go("map");
+    }catch(ex){
+      err.innerHTML = `<div class="feedback ko"><div class="body">${esc(ex.message)}</div></div>`;
+      btn.disabled = false; btn.textContent = reg ? "Crear cuenta y guardar mi progreso" : "Entrar";
+    }
+  });
+}
+
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="hidden") Sync.flush();
+  else if(Sync.token) Sync.sync();
+});
+addEventListener("pagehide", ()=>Sync.flush());
+
+Sync.load();
+updateAccTab();
 renderHud();
 go("map");
+if(Sync.token) Sync.sync();
 </script>
 </body>
 </html>

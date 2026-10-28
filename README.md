@@ -11,10 +11,20 @@ Web para aprender y practicar Python jugando, pensada para la optativa **Introdu
 
 Es una web estática de un solo archivo: abre `index.html` en el navegador o publícala en cualquier hosting estático (Cloudflare Pages).
 
-El progreso se guarda en el navegador (`localStorage`).
+El progreso se guarda en el navegador (`localStorage`) y, si inicias sesión, en tu cuenta, para seguir en cualquier dispositivo.
 
 ## Despliegue en Cloudflare Pages
 
 - Framework preset: **None**
 - Build command: *(vacío)*
 - Build output directory: `/`
+
+## Cuentas y sincronización
+
+La API está en `functions/api/[[path]].js` (Cloudflare Pages Functions) y guarda usuarios, sesiones y progreso en Workers KV.
+
+1. Crea un espacio de nombres de Workers KV (por ejemplo `pyquest`).
+2. En el proyecto de Pages: **Settings → Bindings → Add → KV namespace**, con el nombre de variable `DB`.
+3. Vuelve a desplegar.
+
+Las contraseñas se guardan cifradas con PBKDF2-SHA256 (100.000 iteraciones) y sal aleatoria. Tras 10 intentos fallidos, el usuario queda bloqueado 15 minutos.
