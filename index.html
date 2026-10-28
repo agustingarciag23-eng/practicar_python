@@ -1092,7 +1092,9 @@ function renderChallenge(id){
 
   const onSuccess = () => {
     const first = A.tries===0, clean = !A.hint && !A.sol;
-    if(!wasDone){
+    if(A.solved) return;
+    A.solved = true;
+    if(!S.done[id]){
       let xp = reward; if(s.type==="code" && first && clean) xp += 10; if(A.sol) xp = Math.round(xp/2);
       S.done[id] = {t:Date.now(), first, clean};
       S.coins += 5;
@@ -1113,7 +1115,12 @@ function renderChallenge(id){
     work.innerHTML = `${s.code?`<div class="eyebrow">Lee el código</div><pre class="snippet" style="margin-top:8px">${esc(s.code)}</pre>`:""}
       <p style="font-weight:700;margin:4px 0 10px">${esc(s.q)}</p>
       <div class="options">${s.options.map((o,i)=>`<button class="opt" data-i="${i}"><span class="k">${"ABCD"[i]}</span><span>${esc(o)}</span></button>`).join("")}</div><div id="fbq"></div>`;
+    if(A.solved){
+      work.querySelectorAll(".opt").forEach(x=>{ x.disabled = true; if(+x.dataset.i===s.answer) x.classList.add("right"); });
+      $("#fbq").innerHTML = `<div class="feedback ok"><div class="body">Ya lo has respondido bien.<small>${esc(s.explain)}</small></div></div>`;
+    }
     work.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
+      if(A.solved) return;
       const i = +b.dataset.i;
       if(i===s.answer){
         b.classList.add("right"); work.querySelectorAll(".opt").forEach(x=>x.disabled=true);
@@ -1146,16 +1153,23 @@ function renderChallenge(id){
     showOut(await runCase(ta.value, {pre:c.pre, inputs:c.inputs}));
   };
   $("#copy").onclick = e => copyCode(ta.value, e.currentTarget);
-  $("#chk").onclick = async ()=>{
+  const chk = $("#chk");
+  const lockCheck = () => { chk.disabled = true; chk.textContent = "Superado ✓"; chk.title = "Este reto ya está comprobado"; };
+  if(A.solved) lockCheck();
+  chk.onclick = async ()=>{
+    if(A.solved || chk.disabled) return;
+    chk.disabled = true;
     const fb = $("#fb"); fb.innerHTML = ""; out.className="console"; out.textContent="Comprobando…";
     const res = await evaluate(s, ta.value);
     if(res.out) showOut(res.out); else out.textContent = "";
     if(!res.ok){
+      chk.disabled = false;
       A.tries++;
       fb.innerHTML = `<div class="feedback ko"><div class="body">${esc(res.msg)}${res.extra?`<small>${esc(res.extra)}</small>`:""}</div></div>`;
       work.classList.remove("flash-ko"); void work.offsetWidth; work.classList.add("flash-ko");
       return;
     }
+    lockCheck();
     fb.innerHTML = `<div class="feedback ok"><div class="body">¡Reto superado!${res.n>1?`<small>Ha pasado las ${res.n} pruebas.</small>`:""}</div></div>`;
     onSuccess();
   };
